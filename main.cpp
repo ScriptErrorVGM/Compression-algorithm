@@ -1,94 +1,134 @@
 #include <iostream>
-
+#include <vector>
+#include <map>
+#include <list>
+#include <fstream>
 using namespace std;
-// C program to find Burrows Wheeler transform of
-// a given text
-#include<stdio.h>
-#include<string.h>
-#include<stdlib.h>
 
-// Structure to store data of a rotation
-struct rotation
+class Node
 {
-	int index;
-	char *suffix;
+	public:
+	 int a;
+	 char c;
+	 Node *left, *right;
+
+	 Node(){left=right=NULL;}
+
+	 Node(Node *L, Node *R)
+	 {  left =  L;
+	    right = R;
+	    a = L->a + R->a;  }
 };
 
-// Compares the rotations and
-// sorts the rotations alphabetically
-int cmpfunc (const void *x, const void *y)
+
+struct MyCompare
 {
-	struct rotation *rx = (struct rotation *)x;
-	struct rotation *ry = (struct rotation *)y;
-	return strcmp(rx -> suffix, ry -> suffix);
+    bool operator()(const Node* l, const Node* r) const { return l->a < r->a; }
+};
+
+
+vector<bool> code;
+map<char,vector<bool> > table;
+
+void BuildTable(Node *root)
+{
+    if (root->left!=NULL)
+                      { code.push_back(0);
+                      BuildTable(root->left);}
+
+    if (root->right!=NULL)
+                       { code.push_back(1);
+                       BuildTable(root->right);}
+
+    if (root->left==NULL && root->right==NULL) table[root->c]=code;
+
+    code.pop_back();
 }
 
-// Takes text to be transformed and its length as
-// arguments and returns the corresponding suffix array
-int *computeSuffixArray(char *input_text, int len_text)
-{
-	// Array of structures to store rotations and
-	// their indexes
-	struct rotation suff[len_text];
 
-	// Structure is needed to maintain old indexes of
-	// rotations after sorting them
-	for(int i = 0; i < len_text; i++)
-	{
-		suff[i].index = i;
-		suff[i].suffix = (input_text+i);
+int main (int argc, char *argv[])
+{
+////// считаем частоты символов
+	ifstream f("1.txt", ios::out | ios::binary);
+
+	map<char,int> m;
+
+	while (!f.eof())
+	{ char c = f.get();
+	   m[c]++;}
+
+
+////// записываем начальные узлы в список list
+
+   list<Node*> t;
+   for( map<char,int>::iterator itr=m.begin(); itr!=m.end(); ++itr)
+   {
+      Node *p = new Node;
+      p->c = itr->first;
+      p->a = itr->second;
+      t.push_back(p);      }
+
+
+//////  создаем дерево
+
+  while (t.size()!=1)
+  {
+     t.sort(MyCompare());
+
+     Node *SonL = t.front();
+     t.pop_front();
+     Node *SonR = t.front();
+     t.pop_front();
+
+     Node *parent = new Node(SonL,SonR);
+     t.push_back(parent);
+
+  }
+
+	Node *root = t.front();   //root - указатель на вершину дерева
+
+////// создаем пары 'символ-код':
+
+   	BuildTable(root);
+
+////// ¬ыводим коды в файл output.txt
+
+    f.clear(); f.seekg(0); // перемещаем указатель снова в начало файла
+
+	ofstream g("output.txt", ios::out | ios::binary);
+
+    int count=0; char buf=0;
+    while (!f.eof())
+    { char c = f.get();
+	  vector<bool> x = table[c];
+	  for(int n=0; n<x.size(); n++)
+	   {buf = buf | x[n]<<(7-count);
+	    count++;
+	    if (count==8) { count=0;   g<<buf; buf=0; }
+       }
+    }
+
+    f.close();
+	g.close();
+
+///// считывание из файла output.txt и преобразование обратно
+
+	ifstream F("output.txt", ios::in | ios::binary);
+
+	setlocale(LC_ALL,"rus"); // чтоб русские символы отображались в командной строке
+
+	Node *p = root;
+	count=0; char byte;
+	byte = F.get();
+	while(!F.eof())
+	{   bool b = byte & (1 << (7-count) ) ;
+		if (b) p=p->right; else p=p->left;
+		if (p->left==NULL && p->right==NULL) {cout<<p->c; p=root;}
+		count++;
+		if (count==8) {count=0; byte = F.get();}
 	}
 
-	// Sorts rotations using comparison function defined above
-	qsort(suff, len_text, sizeof(struct rotation), cmpfunc);
+	F.close();
 
-	// Stores the indexes of sorted rotations
-	int *suffix_arr = (int *) malloc (len_text * sizeof(int));
-	for (int i = 0; i < len_text; i++)
-		suffix_arr[i] = suff[i].index;
-
-	// Returns the computed suffix array
-	return suffix_arr;
-}
-
-// Takes suffix array and its size as arguments and returns
-// the Burrows - Wheeler Transform of given text
-char *findLastChar(char *input_text, int *suffix_arr, int n)
-{
-	// Iterates over the suffix array to find
-	// the last char of each cyclic rotation
-	char *bwt_arr = (char *) malloc (n * sizeof(char));
-	int i;
-	for (i = 0; i < n; i++)
-	{
-		// Computes the last char which is given by
-		// input_text[(suffix_arr[i] + n - 1) % n]
-		int j = suffix_arr[i] - 1;
-		if (j < 0)
-			j = j + n;
-
-		bwt_arr[i] = input_text[j];
-	}
-
-	bwt_arr[i] = '\0';
-
-	// Returns the computed Burrows - Wheeler Transform
-	return bwt_arr;
-}
-
-// Driver program to test functions above
-int main()
-{
-	char input_text[] = "SIX.MIXED.PIXIES.SIFT.SIXTY.PIXIE.DUST.BOXES";
-	int len_text = strlen(input_text);
-
-	// Computes the suffix array of our text
-	int *suffix_arr = computeSuffixArray(input_text, len_text);
-
-	// Adds to the output array the last char of each rotation
-	char *bwt_arr = findLastChar(input_text, suffix_arr, len_text);
-
-	printf("Input text : %s\n", input_text);
-	printf("Burrows - Wheeler Transform : %s\n", bwt_arr);
 	return 0;
 }
