@@ -1,134 +1,157 @@
+
 #include <iostream>
+#include <algorithm>
 #include <vector>
-#include <map>
-#include <list>
-#include <fstream>
+#include <string>
 using namespace std;
 
-class Node
+struct ltcode
 {
-	public:
-	 int a;
-	 char c;
-	 Node *left, *right;
-
-	 Node(){left=right=NULL;}
-
-	 Node(Node *L, Node *R)
-	 {  left =  L;
-	    right = R;
-	    a = L->a + R->a;  }
+    unsigned long long frequency;
+    unsigned char letter;
+    string code = "";
 };
 
-
-struct MyCompare
+void zeroset(ltcode *c)
 {
-    bool operator()(const Node* l, const Node* r) const { return l->a < r->a; }
-};
-
-
-vector<bool> code;
-map<char,vector<bool> > table;
-
-void BuildTable(Node *root)
-{
-    if (root->left!=NULL)
-                      { code.push_back(0);
-                      BuildTable(root->left);}
-
-    if (root->right!=NULL)
-                       { code.push_back(1);
-                       BuildTable(root->right);}
-
-    if (root->left==NULL && root->right==NULL) table[root->c]=code;
-
-    code.pop_back();
+    for (unsigned int i = 0; i < 256; ++i)
+    {
+        c[i].frequency = 0;
+        c[i].letter = i;
+    }
 }
 
-
-int main (int argc, char *argv[])
+bool f(ltcode x, ltcode y)
 {
-////// считаем частоты символов
-	ifstream f("1.txt", ios::out | ios::binary);
+    if (x.frequency != y.frequency) return x.frequency > y.frequency;
+    else return x.letter > y.letter;
+}
 
-	map<char,int> m;
+struct B
+{
+    string list;
+    int i;
 
-	while (!f.eof())
-	{ char c = f.get();
-	   m[c]++;}
+    int left;
+    int right;
 
+    string code = "";
 
-////// записываем начальные узлы в список list
-
-   list<Node*> t;
-   for( map<char,int>::iterator itr=m.begin(); itr!=m.end(); ++itr)
-   {
-      Node *p = new Node;
-      p->c = itr->first;
-      p->a = itr->second;
-      t.push_back(p);      }
-
-
-//////  создаем дерево
-
-  while (t.size()!=1)
-  {
-     t.sort(MyCompare());
-
-     Node *SonL = t.front();
-     t.pop_front();
-     Node *SonR = t.front();
-     t.pop_front();
-
-     Node *parent = new Node(SonL,SonR);
-     t.push_back(parent);
-
-  }
-
-	Node *root = t.front();   //root - указатель на вершину дерева
-
-////// создаем пары 'символ-код':
-
-   	BuildTable(root);
-
-////// ¬ыводим коды в файл output.txt
-
-    f.clear(); f.seekg(0); // перемещаем указатель снова в начало файла
-
-	ofstream g("output.txt", ios::out | ios::binary);
-
-    int count=0; char buf=0;
-    while (!f.eof())
-    { char c = f.get();
-	  vector<bool> x = table[c];
-	  for(int n=0; n<x.size(); n++)
-	   {buf = buf | x[n]<<(7-count);
-	    count++;
-	    if (count==8) { count=0;   g<<buf; buf=0; }
-       }
+    B()
+    {
+        list = "";
+        i = 0;
     }
+};
 
-    f.close();
-	g.close();
+void print_binary_tree(int num, vector <B> &tree)
+{
+    if (tree[num].list.size() > 1)
+    {
+        cout << "\"'" << tree[num].list << "', " << tree[num].i << ", code: \'" << tree[num].code << "\'\" -> \"'" << tree[tree[num].left].list << "', " << tree[tree[num].left].i << ", code: \'" << tree[tree[num].left].code << "\'\" [ label = \"0\" ];\n";
+        cout << "\"'" << tree[num].list << "', " << tree[num].i << ", code: \'" << tree[num].code << "\'\" -> \"'" << tree[tree[num].right].list << "', " << tree[tree[num].right].i << ", code: \'" << tree[tree[num].right].code << "\'\" [ label = \"1\" ];\n";
+        print_binary_tree(tree[num].left, tree);
+        print_binary_tree(tree[num].right, tree);
+    }
+}
 
-///// считывание из файла output.txt и преобразование обратно
+void print_tree_graph(vector <B> &tree)
+{
+    cout << "digraph G {\n";
+    print_binary_tree(tree.size()-1, tree);
+    cout << "}\n";
+}
 
-	ifstream F("output.txt", ios::in | ios::binary);
+void huffman_encoding_in(int num, string code, vector <B> &tree, ltcode *letter_codes)
+{
+    tree[num].code = code;
+    if (tree[num].list.size() > 1)
+    {
+        huffman_encoding_in(tree[num].left, code+"0", tree, letter_codes);
+        huffman_encoding_in(tree[num].right, code+"1", tree, letter_codes);
+    }
+    else
+    {
+        for (int j = 0; ; ++j)
+        {
+            if (letter_codes[j].letter == tree[num].list[0])
+            {
+                letter_codes[j].code = code;
+                break;
+            }
+        }
+    }
+}
 
-	setlocale(LC_ALL,"rus"); // чтоб русские символы отображались в командной строке
+void huffman_encoding(vector <B> &sorted_tree, ltcode *letter_codes)
+{
+    huffman_encoding_in(sorted_tree.size()-1, "", sorted_tree, letter_codes);
+}
 
-	Node *p = root;
-	count=0; char byte;
-	byte = F.get();
-	while(!F.eof())
-	{   bool b = byte & (1 << (7-count) ) ;
-		if (b) p=p->right; else p=p->left;
-		if (p->left==NULL && p->right==NULL) {cout<<p->c; p=root;}
-		count++;
-		if (count==8) {count=0; byte = F.get();}
-	}
+int main() {
+    unsigned char c;
+    string S;
+    ltcode count[256], stringlinks[256];
+    zeroset(count);
 
-	F.close();
+    while (scanf("%c", &c))
+    {
+        if (c == '\n') break;
+        S += c;
+        ++count[c].frequency;
+    }
+    sort(count, count+256, f);
 
-	return 0;
+    vector <B> tree;
+    B tmp;
+    tmp.list = "0";
+    int j = 0, letter_amount;
+    for (j = 0; (count[j].frequency); ++j)
+    {
+        tmp.i = count[j].frequency;
+        tmp.list[0] = count[j].letter;
+        tree.push_back(tmp);
+    }
+    int maxsize = j-1, size;
+
+    sort(tree.begin(), tree.end(), [] (B a, B b)
+    {
+        if (a.i != b.i) return (a.i < b.i);
+        else return (a.list.size() < b.list.size());
+    });
+
+    for (j = 0; size < maxsize;)
+    {
+        tmp.list = tree[j].list + tree[j+1].list;
+        tmp.i = tree[j].i + tree[j+1].i;
+        tmp.left = j;
+        tmp.right = j+1;
+
+        size = tmp.list.size();
+
+        tree.push_back(tmp);
+        j += 2;
+        sort(tree.begin()+j, tree.end(), [] (B a, B b)
+        {
+            if (a.i != b.i) return (a.i < b.i);
+            else return (a.list.size() < b.list.size());
+        }
+        );
+    }
+    huffman_encoding(tree, count);
+    print_tree_graph(tree);
+    cout << "\nCodes of letters:\n";
+    for (j = 0; (count[j].frequency); ++j)
+    {
+        cout << '\'' << count[j].letter << "\'(" << count[j].code << ")  ";
+        stringlinks[count[j].letter].code = count[j].code;
+    }
+    cout << "\n\nEncoded string:\n";
+    for (unsigned int i = 0; i < S.size(); ++i)
+    {
+        cout << stringlinks[S[i]].code;
+    }
+    cout << '\n';
+    system("pause");
+    return 0;
 }
